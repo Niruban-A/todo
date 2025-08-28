@@ -12,12 +12,14 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+enum Filtertype { all, starred, date }
+
 class _HomePageState extends State<HomePage> {
   int selectedIndex = 0;
   DateTime? pickeddate;
   TimeOfDay? pickedtime;
+  Filtertype selectedFileter = Filtertype.all;
   var box = Hive.box<Taskpage>("pages");
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,9 +35,19 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.filter_alt, color: Customcolors.yellow),
+          PopupMenuButton<Filtertype>(
+            icon: Icon(Icons.filter_list, color: Customcolors.yellow),
+            onSelected: (Filtertype value) {
+              setState(() {
+                selectedFileter = value;
+              });
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(value: Filtertype.all, child: Text("All")),
+
+              PopupMenuItem(value: Filtertype.date, child: Text("Date")),
+              PopupMenuItem(value: Filtertype.starred, child: Text("Starred")),
+            ],
           ),
         ],
       ),
@@ -50,86 +62,244 @@ class _HomePageState extends State<HomePage> {
           if (currentPage == null || currentPage.tasks.isEmpty) {
             return const Center(child: Text("No tasks yet"));
           }
+          List<Task> filteredTasks = currentPage.tasks;
+          if (selectedFileter == Filtertype.starred) {
+            filteredTasks = filteredTasks
+                .where((task) => task.isStarred == true)
+                .toList();
+          }
+          if (selectedFileter == Filtertype.date) {
+            filteredTasks = filteredTasks
+                .where((task) => task.date != null)
+                .toList();
+
+            if (selectedFileter == Filtertype.date) {
+              filteredTasks = filteredTasks
+                  .where((task) => task.date != null)
+                  .toList();
+
+              filteredTasks.sort((a, b) {
+                return a.date!.compareTo(b.date!);
+              });
+
+              if (filteredTasks.isEmpty) {
+                return const Center(child: Text("No tasks match this filter"));
+              }
+            }
+
+            if (filteredTasks.isEmpty) {
+              return const Center(child: Text("No tasks match this filter"));
+            }
+          }
 
           return ListView.builder(
-            itemCount: currentPage.tasks.length,
+            itemCount: filteredTasks.length,
             itemBuilder: (context, index) {
-              final task = currentPage.tasks[index];
+              final task = filteredTasks[index];
               return Card(
                 child: ListTile(
-                  leading: Checkbox(checkColor: Customcolors.lightBlue,activeColor: Customcolors.yellow,
+                  leading: Checkbox(
+                    checkColor: Customcolors.lightBlue,
+                    activeColor: Customcolors.yellow,
                     value: task.isCompleted ?? false,
                     onChanged: (value) {
                       setState(() {
-                        task.isCompleted = value ?? false;
-                        currentPage.save(); // persist
+                        final originalIndex = currentPage.tasks.indexOf(task);
+                        if (originalIndex != -1) {
+                          final updatedTask = task;
+                          updatedTask.isCompleted = value ?? false;
+                          currentPage.tasks[originalIndex] =
+                              updatedTask; // Update the task at its original position
+                          currentPage.save();
+                        }
                       });
                     },
-                   
-                              
-                
-                        
+                  ),
+                  title: Text(
+                    task.title == "" ? "untitled" : task.title!,
+                    style: GoogleFonts.lato(
+                      decoration: task.isCompleted == true
+                          ? TextDecoration.lineThrough
+                          : TextDecoration.none,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Customcolors.blue,
                     ),
-                    title: Text(
-                      task.title=="" ? "untitled":task.title!,
-                      style: GoogleFonts.lato(
-                        decoration: task.isCompleted == true
-                            ? TextDecoration.lineThrough
-                            : TextDecoration.none,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Customcolors.blue,
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        task.date != null
+                            ? "Due date: ${task.date!.day}/${task.date!.month}/${task.date!.year}"
+                            : "No due date set",
+                        style: GoogleFonts.lato(fontWeight: FontWeight.w500),
                       ),
-                    ),
-                    subtitle: Column(
-                      children: [
-                        
-                        Text(
-                          task.date != null
-                              ? "Due date: ${task.date!.day}/${task.date!.month}/${task.date!.year}"
-                              : "Task Schedueled date: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}",
-                          style: GoogleFonts.lato(fontWeight: FontWeight.w500),
-                          textAlign: TextAlign.start,
+                      Text(
+                        task.time != null
+                            ? "Due time: ${task.time}"
+                            : "Task Schedueled date: ${TimeOfDay.now().format(context)}",
+                        style: GoogleFonts.lato(fontWeight: FontWeight.w500),
+                        textAlign: TextAlign.start,
+                      ),
+                    ],
+                  ),
+
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          task.isStarred == true
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
                         ),
-                        Text(
-                          task.time != null
-                              ? "Due time: ${task.time}"
-                              : "Task Schedueled date: ${TimeOfDay.now().format(context)}",
-                          style: GoogleFonts.lato(fontWeight: FontWeight.w500),
-                          textAlign: TextAlign.start,
-                        ),
-                      ],
-                    ),
-                   
-                    
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            task.isStarred == true ? Icons.star : Icons.star_border,
-                            color: Colors.amber,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              task.isStarred = !(task.isStarred ?? false);
+                        onPressed: () {
+                          setState(() {
+                            task.isStarred = !(task.isStarred ?? false);
+                            currentPage.save();
+                          });
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.blueGrey),
+                        onPressed: () {
+                          setState(() {
+                            final originalIndex = currentPage.tasks.indexOf(
+                              task,
+                            );
+                            if (originalIndex != -1) {
+                              currentPage.tasks.removeAt(originalIndex);
                               currentPage.save();
-                            });
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.blueGrey),
-                          onPressed: () {
-                            setState(() {
-                              currentPage.tasks.removeAt(index);
-                              currentPage.save();
-                            });
-                           
-                          },
-                        ),
-                      ],
-                    ),
-                  
+                            }
+                          });
+                        },
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          pickeddate = null;
+                          pickedtime = null;
+                          TextEditingController editcontroller =
+                              TextEditingController(text: task.title);
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              return StatefulBuilder(
+                                builder: (context, setStateDialog) {
+                                  return AlertDialog(
+                                    title: Text('Edit Task'),
+                                    content: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        TextField(
+                                          controller: editcontroller,
+                                          autofocus: true,
+                                          decoration: InputDecoration(
+                                            hintText: 'Enter task title',
+                                          ),
+                                        ),
+                                        SizedBox(height: 10),
+                                        Row(
+                                          children: [
+                                            IconButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    Customcolors.lightBlue,
+                                              ),
+                                              onPressed: () async {
+                                                DateTime? date =
+                                                    await datePicker(context);
+                                                setStateDialog(() {
+                                                  if (date != null) {
+                                                    pickeddate = date;
+                                                  }
+                                                });
+                                              },
+                                              icon: Icon(Icons.calendar_month),
+                                            ),
+                                            SizedBox(width: 10),
+                                            Text(
+                                              pickeddate == null
+                                                  ? "${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}"
+                                                  : "${pickeddate!.day}/${pickeddate!.month}/${pickeddate!.year}",
+                                            ),
+                                          ],
+                                        ),
+                                        SizedBox(height: 10),
+
+                                        Row(
+                                          children: [
+                                            IconButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    Customcolors.lightBlue,
+                                              ),
+                                              onPressed: () async {
+                                                TimeOfDay? time =
+                                                    await timePicker(context);
+                                                setStateDialog(() {
+                                                  if (time != null) {
+                                                    pickedtime = time;
+                                                  }
+                                                });
+                                              },
+                                              icon: Icon(Icons.access_time),
+                                            ),
+                                            SizedBox(width: 10),
+                                            Text(
+                                              pickedtime == null
+                                                  ? "${TimeOfDay.now().format(context)}"
+                                                  : formatToISD(
+                                                      pickedtime!,
+                                                    ), // convert to 12hr format only for display
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.of(context).pop();
+                                        },
+                                        child: Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            final originalIndex = currentPage
+                                                .tasks
+                                                .indexOf(task);
+                                            if (originalIndex != -1) {
+                                              currentPage
+                                                  .tasks[originalIndex] = Task(
+                                                title: editcontroller.text,
+                                                isCompleted: task.isCompleted,
+                                                isStarred: task.isStarred,
+                                                date: pickeddate,
+                                                time: pickedtime?.format(
+                                                  context,
+                                                ),
+                                              );
+                                              currentPage.save();
+                                            }
+                                          });
+                                          Navigator.of(context).pop();
+                                        },
+                                        child: Text('Save'),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                          );
+                        },
+                        icon: Icon(Icons.edit, color: Colors.lightGreen),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -193,6 +363,8 @@ class _HomePageState extends State<HomePage> {
             ),
             IconButton(
               onPressed: () {
+                pickeddate = null;
+                pickedtime = null;
                 TextEditingController tasktitleController =
                     TextEditingController();
                 showDialog(
@@ -218,7 +390,11 @@ class _HomePageState extends State<HomePage> {
                           onPressed: () {
                             setState(() {
                               box.add(
-                                Taskpage(title: tasktitleController.text=="" ? "Untitled":tasktitleController.text),
+                                Taskpage(
+                                  title: tasktitleController.text == ""
+                                      ? "Untitled"
+                                      : tasktitleController.text,
+                                ),
                               );
                             });
                             Navigator.of(context).pop();
@@ -238,6 +414,8 @@ class _HomePageState extends State<HomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
+          pickeddate = null;
+          pickedtime = null;
           TextEditingController taskscontroller = TextEditingController();
           showDialog(
             context: context,
@@ -261,7 +439,10 @@ class _HomePageState extends State<HomePage> {
                         SizedBox(height: 20),
                         Row(
                           children: [
-                            IconButton(style: ElevatedButton.styleFrom(backgroundColor: Customcolors.lightBlue),
+                            IconButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Customcolors.lightBlue,
+                              ),
                               onPressed: () async {
                                 DateTime? date = await datePicker(context);
                                 setStateDialog(() {
@@ -270,22 +451,24 @@ class _HomePageState extends State<HomePage> {
                                   }
                                 });
                               },
-                               icon:Icon(Icons.calendar_month,)
-                               
-                            ),SizedBox(width: 10),
+                              icon: Icon(Icons.calendar_month),
+                            ),
+                            SizedBox(width: 10),
                             Text(
-                                pickeddate == null
-                                    ? "${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}"
-                                    : "${pickeddate!.day}/${pickeddate!.month}/${pickeddate!.year}",
-                              ),
+                              pickeddate == null
+                                  ? "${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}"
+                                  : "${pickeddate!.day}/${pickeddate!.month}/${pickeddate!.year}",
+                            ),
                           ],
                         ),
                         SizedBox(height: 10),
 
-                        
                         Row(
                           children: [
-                            IconButton(style: ElevatedButton.styleFrom(backgroundColor: Customcolors.lightBlue),
+                            IconButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Customcolors.lightBlue,
+                              ),
                               onPressed: () async {
                                 TimeOfDay? time = await timePicker(context);
                                 setStateDialog(() {
@@ -294,16 +477,16 @@ class _HomePageState extends State<HomePage> {
                                   }
                                 });
                               },
-                              icon: Icon(Icons.access_time)
-                              
-                            ),SizedBox(width: 10),
+                              icon: Icon(Icons.access_time),
+                            ),
+                            SizedBox(width: 10),
                             Text(
-                                pickedtime == null
-                                    ? "${TimeOfDay.now().format(context)}"
-                                    : formatToISD(
-                                        pickedtime!,
-                                      ), // convert to 12hr format only for display
-                              ),
+                              pickedtime == null
+                                  ? "${TimeOfDay.now().format(context)}"
+                                  : formatToISD(
+                                      pickedtime!,
+                                    ), // convert to 12hr format only for display
+                            ),
                           ],
                         ),
                       ],
@@ -327,7 +510,7 @@ class _HomePageState extends State<HomePage> {
                               date: pickeddate,
                               time: pickedtime?.format(context),
                             );
-                            currentPage.tasks = [...currentPage.tasks, newTask];
+                            currentPage.tasks = [newTask, ...currentPage.tasks];
                             currentPage.save();
                           });
                           Navigator.of(context).pop();
