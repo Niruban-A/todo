@@ -102,18 +102,31 @@ class _HomePageState extends State<HomePage> {
                     checkColor: Customcolors.lightBlue,
                     activeColor: Customcolors.yellow,
                     value: task.isCompleted ?? false,
-                    onChanged: (value) {
-                      setState(() {
-                        final originalIndex = currentPage.tasks.indexOf(task);
-                        if (originalIndex != -1) {
-                          final updatedTask = task;
-                          updatedTask.isCompleted = value ?? false;
-                          currentPage.tasks[originalIndex] =
-                              updatedTask; // Update the task at its original position
-                          currentPage.save();
-                        }
-                      });
-                    },
+                  onChanged: (value) {
+  setState(() {
+    final originalIndex = currentPage.tasks.indexOf(task);
+    if (originalIndex != -1) {
+      // 1. Update the task's completion status.
+      final updatedTask = task;
+      updatedTask.isCompleted = value ?? false;
+
+      // 2. Remove the task from its original position.
+      currentPage.tasks.removeAt(originalIndex);
+
+      // 3. Conditionally add the task to the beginning or end of the list.
+      if (updatedTask.isCompleted!) {
+        // If checked, add to the end of the list.
+        currentPage.tasks.add(updatedTask);
+      } else {
+        // If unchecked, add to the beginning of the list.
+        currentPage.tasks.insert(0, updatedTask);
+      }
+
+      // 4. Save the changes to the Hive box.
+      currentPage.save();
+    }
+  });
+},
                   ),
                   title: Text(
                     task.title == "" ? "untitled" : task.title!,
@@ -138,7 +151,7 @@ class _HomePageState extends State<HomePage> {
                       Text(
                         task.time != null
                             ? "Due time: ${task.time}"
-                            : "Task Schedueled date: ${TimeOfDay.now().format(context)}",
+                            : "Schedueled time: ${TimeOfDay.now().format(context)}",
                         style: GoogleFonts.lato(fontWeight: FontWeight.w500),
                         textAlign: TextAlign.start,
                       ),
